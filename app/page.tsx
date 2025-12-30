@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import FilterBar from "@/components/features/FilterBar";
 import MapView from "@/components/features/MapView";
-import type { FilterValues } from "@/types/room";
+import RoomListSidebar from "@/components/features/RoomListSidebar";
+import { MOCK_ROOMS } from "@/constants/mockRooms";
+import type { FilterValues, Room } from "@/types/room";
 
 export default function Home() {
   const [filters, setFilters] = useState<FilterValues>({
@@ -17,6 +19,9 @@ export default function Home() {
   });
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<Room[]>(MOCK_ROOMS);
+  const [filteredRooms, setFilteredRooms] = useState<Room[]>(MOCK_ROOMS);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   // Yêu cầu quyền GPS khi component mount
   useEffect(() => {
@@ -121,8 +126,45 @@ export default function Home() {
   };
 
   const handleApplyFilters = () => {
-    console.log("Applied filters:", filters);
-    // TODO: Implement filter logic
+    let result = [...rooms];
+
+    // Filter by price range
+    if (filters.minPrice) {
+      result = result.filter(
+        (room) => room.price >= parseInt(filters.minPrice)
+      );
+    }
+    if (filters.maxPrice) {
+      result = result.filter(
+        (room) => room.price <= parseInt(filters.maxPrice)
+      );
+    }
+
+    // Filter by area range
+    if (filters.minArea) {
+      result = result.filter((room) => room.area >= parseInt(filters.minArea));
+    }
+    if (filters.maxArea) {
+      result = result.filter((room) => room.area <= parseInt(filters.maxArea));
+    }
+
+    // Filter by room type
+    if (filters.roomType && filters.roomType !== "all") {
+      result = result.filter((room) => room.roomType === filters.roomType);
+    }
+
+    // Filter by location (simple text search)
+    if (filters.location) {
+      const searchTerm = filters.location.toLowerCase();
+      result = result.filter(
+        (room) =>
+          room.address.toLowerCase().includes(searchTerm) ||
+          room.title.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    setFilteredRooms(result);
+    console.log("Applied filters:", filters, "Results:", result.length);
   };
 
   const handleResetFilters = () => {
@@ -134,10 +176,24 @@ export default function Home() {
       maxArea: "",
       roomType: "",
     });
+    setFilteredRooms(rooms);
+    setSelectedRoom(null);
   };
 
+  const handleRoomSelect = useCallback((room: Room) => {
+    setSelectedRoom(room);
+  }, []);
+
   return (
-    <div className="relative min-h-screen">
+    <div className="relative h-screen w-screen overflow-hidden">
+      {/* Map View - Full screen background */}
+      <MapView
+        rooms={filteredRooms}
+        selectedRoom={selectedRoom}
+        onRoomSelect={handleRoomSelect}
+      />
+
+      {/* Filter Bar - Left side */}
       <FilterBar
         filters={filters}
         isGettingLocation={isGettingLocation}
@@ -147,7 +203,13 @@ export default function Home() {
         onApplyFilters={handleApplyFilters}
         onResetFilters={handleResetFilters}
       />
-      <MapView />
+
+      {/* Room List Sidebar - Right side */}
+      <RoomListSidebar
+        rooms={filteredRooms}
+        selectedRoom={selectedRoom}
+        onRoomSelect={handleRoomSelect}
+      />
     </div>
   );
 }
