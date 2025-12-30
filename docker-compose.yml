@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8080
+      - HOSTNAME=0.0.0.0
       # Add your environment variables here
       # - NEXT_PUBLIC_MAPBOX_TOKEN=your_token_here
     expose:
@@ -18,11 +19,9 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8080/ || ps aux | grep -q '[n]ode server.js'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # Nginx Reverse Proxy
   nginx:

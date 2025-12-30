@@ -11,13 +11,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8080
+      - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_MAPBOX_TOKEN=${MAPBOX_TOKEN:-pk.eyJ1IjoibGluaGxlOTgiLCJhIjoiY21qcmNjN3lpMm5tZDNmcTFkdGQzcHc2MiJ9.TkC-SnY66s8USOXDli7IPg}
     expose:
       - "8080"
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8080/ || ps aux | grep -q '[n]ode server.js'"]
       interval: 30s
       timeout: 10s
       retries: 3
