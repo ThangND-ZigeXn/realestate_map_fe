@@ -6,25 +6,38 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { Room } from "@/types/room";
+import { RoomFeature } from "@/types/room";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
+// Default center (Ho Chi Minh City)
+const DEFAULT_CENTER: [number, number] = [106.700806, 10.773884];
+
 interface MapViewProps {
-  rooms?: Room[];
-  selectedRoom?: Room | null;
-  onRoomSelect?: (room: Room) => void;
+  rooms?: RoomFeature[];
+  selectedRoom?: RoomFeature | null;
+  onRoomSelect?: (room: RoomFeature) => void;
+  onOpenRoomModal?: (room: RoomFeature) => void;
+  isLoading?: boolean;
+  center?: [number, number]; // [longitude, latitude]
+  userLocation?: [number, number] | null; // User's current GPS location [longitude, latitude]
 }
 
 export default function MapView({
   rooms = [],
   selectedRoom,
   onRoomSelect,
+  onOpenRoomModal,
+  isLoading = false, // eslint-disable-line @typescript-eslint/no-unused-vars
+  center = DEFAULT_CENTER,
+  userLocation = null,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const prevCenterRef = useRef<[number, number]>(center);
 
   // Initialize map
   useEffect(() => {
@@ -35,7 +48,7 @@ export default function MapView({
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
-      center: [106.700806, 10.773884], // TP.HCM center
+      center: center,
       zoom: 12,
       attributionControl: false,
     });
@@ -66,7 +79,68 @@ export default function MapView({
       map.current?.remove();
       map.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fly to new center when it changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Check if center actually changed
+    const [prevLng, prevLat] = prevCenterRef.current;
+    const [newLng, newLat] = center;
+
+    if (prevLng !== newLng || prevLat !== newLat) {
+      map.current.flyTo({
+        center: center,
+        zoom: 16,
+        duration: 1500,
+      });
+      prevCenterRef.current = center;
+    }
+  }, [center, mapLoaded]);
+
+  // Add/update user location marker
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing user marker
+    if (userMarkerRef.current) {
+      userMarkerRef.current.remove();
+      userMarkerRef.current = null;
+    }
+
+    // Add new user marker if location is available
+    if (userLocation) {
+      const [lng, lat] = userLocation;
+
+      // Create custom user location marker element
+      const el = document.createElement("div");
+      el.className = "user-location-marker";
+      el.innerHTML = `
+        <div class="user-marker-outer">
+          <div class="user-marker-inner"></div>
+        </div>
+        <div class="user-marker-pulse"></div>
+      `;
+
+      // Create popup for user location
+      const popup = new mapboxgl.Popup({
+        offset: 25,
+        closeButton: false,
+        closeOnClick: true,
+      }).setHTML(`
+        <div class="user-popup">
+          <p class="user-popup-text">📍 Vị trí của bạn</p>
+        </div>
+      `);
+
+      userMarkerRef.current = new mapboxgl.Marker(el)
+        .setLngLat([lng, lat])
+        .setPopup(popup)
+        .addTo(map.current);
+    }
+  }, [userLocation, mapLoaded]);
 
   // Add markers for rooms
   useEffect(() => {
@@ -78,74 +152,92 @@ export default function MapView({
 
     // Add new markers
     rooms.forEach((room) => {
+      const { properties, geometry } = room;
+      const [longitude, latitude] = geometry.coordinates;
+
       // Create custom marker element
       const el = document.createElement("div");
       el.className = "room-marker";
       el.innerHTML = `
         <div class="marker-container ${
-          selectedRoom?.id === room.id ? "selected" : ""
+          selectedRoom?.properties.id === properties.id ? "selected" : ""
         }">
-          <div class="marker-price">${formatPrice(room.price)}</div>
+          <div class="marker-price">${formatPrice(properties.price)}</div>
         </div>
       `;
 
-      // Create popup
+      // Create popup with "Xem chi tiết" button
       const popup = new mapboxgl.Popup({
         offset: 25,
         closeButton: true,
         closeOnClick: false,
-        maxWidth: "300px",
+        maxWidth: "280px",
       }).setHTML(`
-        <div class="room-popup">
-          <img src="${room.images[0]}" alt="${
-        room.title
-      }" class="popup-image" onerror="this.style.display='none'" />
+        <div class="room-popup" data-room-id="${properties.id}">
           <div class="popup-content">
-            <h3 class="popup-title">${room.title}</h3>
-            <p class="popup-address">${room.address}</p>
+            <h3 class="popup-title">${properties.title}</h3>
+            <p class="popup-address">${properties.address || ""}</p>
             <div class="popup-details">
-              <span class="popup-price">${room.price.toLocaleString(
+              <span class="popup-price">${properties.price.toLocaleString(
                 "vi-VN"
-              )} VNĐ/tháng</span>
-              <span class="popup-area">${room.area} m²</span>
+              )} đ/tháng</span>
+              <span class="popup-area">${properties.area || 0} m²</span>
             </div>
+            <button class="popup-view-detail-btn" data-room-id="${
+              properties.id
+            }">
+              Xem chi tiết
+            </button>
           </div>
         </div>
       `);
 
       const marker = new mapboxgl.Marker(el)
-        .setLngLat([room.longitude, room.latitude])
+        .setLngLat([longitude, latitude])
         .setPopup(popup)
         .addTo(map.current!);
 
-      // Handle marker click
-      el.addEventListener("click", () => {
+      // Handle popup open to attach click handler for "Xem chi tiết" button
+      popup.on("open", () => {
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+          const btn = document.querySelector(
+            `.popup-view-detail-btn[data-room-id="${properties.id}"]`
+          );
+          if (btn) {
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              onOpenRoomModal?.(room); // Open modal only, no fly
+              popup.remove(); // Close popup when opening modal
+            });
+          }
+        }, 0);
+      });
+
+      // Handle marker click - toggle popup and select room (highlight)
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+
+        // Close all other popups first
+        markersRef.current.forEach((m) => {
+          const p = m.getPopup();
+          if (p && p.isOpen() && m !== marker) {
+            p.remove();
+          }
+        });
+
+        // Select this room (for highlighting)
         onRoomSelect?.(room);
+
+        // Toggle this popup
+        if (!popup.isOpen()) {
+          marker.togglePopup();
+        }
       });
 
       markersRef.current.push(marker);
     });
-  }, [rooms, mapLoaded, selectedRoom, onRoomSelect]);
-
-  // Fly to selected room
-  useEffect(() => {
-    if (!map.current || !selectedRoom) return;
-
-    map.current.flyTo({
-      center: [selectedRoom.longitude, selectedRoom.latitude],
-      zoom: 15,
-      duration: 1500,
-    });
-
-    // Open popup for selected room
-    const markerIndex = rooms.findIndex((r) => r.id === selectedRoom.id);
-    if (markerIndex !== -1 && markersRef.current[markerIndex]) {
-      const popup = markersRef.current[markerIndex].getPopup();
-      if (popup && !popup.isOpen()) {
-        markersRef.current[markerIndex].togglePopup();
-      }
-    }
-  }, [selectedRoom, rooms]);
+  }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal]);
 
   return (
     <>
@@ -174,15 +266,72 @@ export default function MapView({
           transform: scale(1.1);
         }
 
-        .room-popup {
-          font-family: system-ui, -apple-system, sans-serif;
+        /* User location marker styles */
+        .user-location-marker {
+          position: relative;
+          width: 24px;
+          height: 24px;
         }
 
-        .popup-image {
-          width: 100%;
-          height: 120px;
-          object-fit: cover;
-          border-radius: 8px 8px 0 0;
+        .user-marker-outer {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 24px;
+          height: 24px;
+          background: rgba(37, 99, 235, 0.2);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .user-marker-inner {
+          width: 14px;
+          height: 14px;
+          background: #2563eb;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .user-marker-pulse {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 40px;
+          height: 40px;
+          background: rgba(37, 99, 235, 0.3);
+          border-radius: 50%;
+          animation: pulse 2s ease-out infinite;
+        }
+
+        @keyframes pulse {
+          0% {
+            transform: translate(-50%, -50%) scale(0.5);
+            opacity: 1;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0;
+          }
+        }
+
+        .user-popup {
+          padding: 8px 12px;
+        }
+
+        .user-popup-text {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 500;
+          color: #1f2937;
+        }
+
+        .room-popup {
+          font-family: system-ui, -apple-system, sans-serif;
         }
 
         .popup-content {
@@ -206,6 +355,24 @@ export default function MapView({
           display: flex;
           justify-content: space-between;
           align-items: center;
+          margin-bottom: 12px;
+        }
+
+        .popup-view-detail-btn {
+          width: 100%;
+          padding: 8px 16px;
+          background: #2563eb;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .popup-view-detail-btn:hover {
+          background: #1d4ed8;
         }
 
         .popup-price {
@@ -222,6 +389,12 @@ export default function MapView({
           border-radius: 4px;
         }
 
+        .popup-phone {
+          font-size: 12px;
+          color: #2563eb;
+          margin: 8px 0 0 0;
+        }
+
         .mapboxgl-popup-content {
           padding: 0;
           border-radius: 12px;
@@ -230,8 +403,8 @@ export default function MapView({
 
         .mapboxgl-popup-close-button {
           font-size: 18px;
-          color: white;
-          background: rgba(0, 0, 0, 0.5);
+          color: #374151;
+          background: rgba(255, 255, 255, 0.9);
           border-radius: 50%;
           width: 24px;
           height: 24px;
@@ -243,7 +416,7 @@ export default function MapView({
         }
 
         .mapboxgl-popup-close-button:hover {
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(255, 255, 255, 1);
         }
       `}</style>
       <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
