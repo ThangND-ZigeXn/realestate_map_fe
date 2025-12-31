@@ -25,6 +25,21 @@ import { Menu } from "lucide-react";
 
 import AddressSearchBox from "./AddressSearchBox";
 
+// Format number with dots as thousands separator (e.g., 5000000 -> "5.000.000")
+const formatPrice = (value: number | undefined): string => {
+  if (value === undefined || value === null) return "";
+  return value.toLocaleString("vi-VN");
+};
+
+// Parse formatted price string back to number (e.g., "5.000.000" -> 5000000)
+const parsePrice = (value: string): number | undefined => {
+  if (value === "") return undefined;
+  // Remove all dots (thousands separator)
+  const cleanValue = value.replace(/\./g, "");
+  const numValue = parseInt(cleanValue, 10);
+  return isNaN(numValue) ? undefined : numValue;
+};
+
 interface FilterBarProps {
   filters: FilterValues;
   isGettingLocation: boolean;
@@ -47,8 +62,18 @@ const FilterBar = ({
   onApplyFilters,
   onResetFilters,
 }: FilterBarProps) => {
-  const handleNumberChange = (
-    field: "minPrice" | "maxPrice" | "minArea" | "maxArea",
+  // Handle price input change - parse formatted string to number
+  const handlePriceChange = (
+    field: "minPrice" | "maxPrice",
+    value: string
+  ) => {
+    const numValue = parsePrice(value);
+    onFilterChange(field, numValue);
+  };
+
+  // Handle area input change (no formatting needed)
+  const handleAreaChange = (
+    field: "minArea" | "maxArea",
     value: string
   ) => {
     const numValue = value === "" ? undefined : parseInt(value, 10);
@@ -99,11 +124,12 @@ const FilterBar = ({
                 </Label>
                 <Input
                   id="min-price"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="0"
-                  value={filters.minPrice ?? ""}
+                  value={formatPrice(filters.minPrice)}
                   onChange={(e) =>
-                    handleNumberChange("minPrice", e.target.value)
+                    handlePriceChange("minPrice", e.target.value)
                   }
                 />
               </div>
@@ -116,11 +142,12 @@ const FilterBar = ({
                 </Label>
                 <Input
                   id="max-price"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="Không giới hạn"
-                  value={filters.maxPrice ?? ""}
+                  value={formatPrice(filters.maxPrice)}
                   onChange={(e) =>
-                    handleNumberChange("maxPrice", e.target.value)
+                    handlePriceChange("maxPrice", e.target.value)
                   }
                 />
               </div>
@@ -146,7 +173,7 @@ const FilterBar = ({
                   max={1000}
                   value={filters.minArea ?? ""}
                   onChange={(e) =>
-                    handleNumberChange("minArea", e.target.value)
+                    handleAreaChange("minArea", e.target.value)
                   }
                 />
               </div>
@@ -165,7 +192,7 @@ const FilterBar = ({
                   max={1000}
                   value={filters.maxArea ?? ""}
                   onChange={(e) =>
-                    handleNumberChange("maxArea", e.target.value)
+                    handleAreaChange("maxArea", e.target.value)
                   }
                 />
               </div>

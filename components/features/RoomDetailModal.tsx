@@ -1,6 +1,7 @@
 "use client";
 
-import { MapPin, Phone, Ruler, X } from "lucide-react";
+import { MapPin, Phone, Ruler } from "lucide-react";
+import Image from "next/image";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RoomFeature } from "@/types/room";
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
 interface RoomDetailModalProps {
   room: RoomFeature | null;
@@ -109,13 +112,21 @@ const RoomDetailModal = ({
             </div>
           )}
 
-          {/* Location Coordinates */}
+          {/* Location Map */}
           <div>
-            <h4 className="font-semibold mb-2">Tọa độ</h4>
-            <p className="text-sm text-muted-foreground">
-              Kinh độ: {geometry.coordinates[0].toFixed(6)}
-              <br />
-              Vĩ độ: {geometry.coordinates[1].toFixed(6)}
+            <h4 className="font-semibold mb-2">Vị trí trên bản đồ</h4>
+            <div className="rounded-lg overflow-hidden border relative h-[200px]">
+              <Image
+                src={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-l+ef4444(${geometry.coordinates[0]},${geometry.coordinates[1]})/${geometry.coordinates[0]},${geometry.coordinates[1]},15,0/400x200@2x?access_token=${MAPBOX_TOKEN}`}
+                alt="Vị trí phòng trọ"
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {geometry.coordinates[1].toFixed(6)},{" "}
+              {geometry.coordinates[0].toFixed(6)}
             </p>
           </div>
 
@@ -123,11 +134,7 @@ const RoomDetailModal = ({
           {(properties.phoneFormatted || properties.phone) && (
             <div className="pt-4 border-t">
               <h4 className="font-semibold mb-3">Liên hệ</h4>
-              <Button
-                asChild
-                className="w-full"
-                size="lg"
-              >
+              <Button asChild className="w-full" size="lg">
                 <a href={`tel:${properties.phone}`}>
                   <Phone className="size-4 mr-2" />
                   {properties.phoneFormatted || properties.phone}
@@ -142,4 +149,3 @@ const RoomDetailModal = ({
 };
 
 export default RoomDetailModal;
-

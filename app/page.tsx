@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import FilterBar from "@/components/features/FilterBar";
+import LocationPrompt from "@/components/features/LocationPrompt";
 import MapView from "@/components/features/MapView";
 import RoomDetailModal from "@/components/features/RoomDetailModal";
 import RoomListSidebar from "@/components/features/RoomListSidebar";
 import { useRooms } from "@/lib/react-query/rooms/use-room";
-import type { FilterValues, RoomFeature } from "@/types/room";
+import type { FilterValues, MapBoundsInfo, RoomFeature } from "@/types/room";
+
+// Default radius for initial load (5km)
+const DEFAULT_RADIUS = 5000;
 
 const INITIAL_FILTERS: FilterValues = {
   address: "",
+  addressRadius: DEFAULT_RADIUS,
   minPrice: undefined,
   maxPrice: undefined,
   minArea: undefined,
@@ -19,9 +24,6 @@ const INITIAL_FILTERS: FilterValues = {
 };
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-
-// Default center (Ho Chi Minh City)
-const DEFAULT_CENTER: [number, number] = [106.700806, 10.773884];
 
 // Mapbox Geocoding API for reverse geocoding (coordinates -> address)
 async function reverseGeocode(
@@ -76,15 +78,13 @@ export default function Home() {
   const [appliedFilters, setAppliedFilters] = useState<FilterValues | null>(
     null
   );
-  // Track if initial API call has been made
-  const hasInitialLoad = useRef(false);
 
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<RoomFeature | null>(null);
 
-  // Map center coordinates [longitude, latitude]
-  const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER);
+  // Map center coordinates [longitude, latitude] - null until GPS or user input
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
 
   // User's current GPS location [longitude, latitude]
   const [userLocation, setUserLocation] = useState<[number, number] | null>(
@@ -95,12 +95,30 @@ export default function Home() {
   const [modalRoom, setModalRoom] = useState<RoomFeature | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Current map radius from map bounds (updated on zoom/drag)
+  const [currentMapRadius, setCurrentMapRadius] =
+    useState<number>(DEFAULT_RADIUS);
+
+  // Control location prompt dialog visibility
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
+  // Search origin - the original location used for API search
+  // This stays fixed while user drags the map, used to calculate distance for addressRadius
+  const [searchOrigin, setSearchOrigin] = useState<[number, number] | null>(
+    null
+  );
+
+  // Track if we've tried auto GPS request
+  const gpsAutoRequested = useRef(false);
+
   // Build query params from appliedFilters - filter out empty/undefined values
   const queryParams =
     appliedFilters === null
       ? undefined
       : {
           address: appliedFilters.address || undefined,
+          addressRadius:
+            currentMapRadius || appliedFilters.addressRadius || DEFAULT_RADIUS,
           minPrice: appliedFilters.minPrice || undefined,
           maxPrice: appliedFilters.maxPrice || undefined,
           minArea: appliedFilters.minArea || undefined,
@@ -115,35 +133,40 @@ export default function Home() {
     error,
   } = useRooms(queryParams, { enabled: appliedFilters !== null });
 
-  // Yêu cầu quyền GPS khi component mount và gọi API ban đầu
-  useEffect(() => {
-    if (hasInitialLoad.current) return;
-    hasInitialLoad.current = true;
+  // Check if geolocation is supported
+  const isGeoLocationSupported =
+    typeof navigator !== "undefined" && !!navigator.geolocation;
 
-    const initLocation = async () => {
-      if (!navigator.geolocation) {
-        // GPS not supported - call API with empty location
-        setLocationError("Trình duyệt không hỗ trợ GPS.");
-        setAppliedFilters(INITIAL_FILTERS);
+  // Auto-request GPS on mount if supported
+  // Show the prompt immediately AND request GPS permission at the same time
+  useEffect(() => {
+    if (gpsAutoRequested.current) return;
+    gpsAutoRequested.current = true;
+
+    const requestGPS = () => {
+      if (!isGeoLocationSupported) {
+        // GPS not supported - show prompt for manual input only
+        setShowLocationPrompt(true);
         return;
       }
 
+      // Show prompt AND request GPS permission simultaneously
+      // User sees our custom dialog while browser shows GPS permission dialog
+      setShowLocationPrompt(true);
       setIsGettingLocation(true);
 
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setLocationError(null);
-          console.log("User location:", latitude, longitude);
 
-          // Set map center and user location marker
+          // Set map center, search origin, and user location marker
           setMapCenter([longitude, latitude]);
+          setSearchOrigin([longitude, latitude]); // Set as new search origin
           setUserLocation([longitude, latitude]);
 
           // Use Mapbox Geocoding API for reverse geocoding
           const locationAddress = await reverseGeocode(latitude, longitude);
 
-          // Update both filters and appliedFilters, then call API
           const newFilters: FilterValues = {
             ...INITIAL_FILTERS,
             address: locationAddress,
@@ -151,21 +174,25 @@ export default function Home() {
           setFilters(newFilters);
           setAppliedFilters(newFilters);
           setIsGettingLocation(false);
+          // Close prompt - we got location successfully
+          setShowLocationPrompt(false);
         },
         () => {
-          // GPS denied or failed - call API with empty location
-          setLocationError("Không thể lấy vị trí. Vui lòng nhập thủ công.");
+          // GPS denied or failed - keep prompt open for manual input
           setIsGettingLocation(false);
-          setAppliedFilters(INITIAL_FILTERS);
+          // Prompt is already shown, just stop loading
         }
       );
     };
 
-    initLocation();
-  }, []);
+    // Delay to avoid sync setState in effect body
+    const timer = setTimeout(requestGPS, 0);
+    return () => clearTimeout(timer);
+  }, [isGeoLocationSupported]);
 
+  // Handle GPS request from LocationPrompt or FilterBar
   const handleGetCurrentLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (!isGeoLocationSupported) {
       setLocationError("Trình duyệt không hỗ trợ GPS.");
       return;
     }
@@ -177,17 +204,20 @@ export default function Home() {
       async (position) => {
         const { latitude, longitude } = position.coords;
 
-        // Set map center and user location marker
+        // Set map center, search origin, and user location marker
         setMapCenter([longitude, latitude]);
+        setSearchOrigin([longitude, latitude]); // Set as new search origin
         setUserLocation([longitude, latitude]);
 
         // Use Mapbox Geocoding API for reverse geocoding
         const locationAddress = await reverseGeocode(latitude, longitude);
 
-        setFilters((prev) => ({
-          ...prev,
+        const newFilters: FilterValues = {
+          ...INITIAL_FILTERS,
           address: locationAddress,
-        }));
+        };
+        setFilters(newFilters);
+        setAppliedFilters(newFilters);
         setIsGettingLocation(false);
       },
       () => {
@@ -195,6 +225,30 @@ export default function Home() {
         setIsGettingLocation(false);
       }
     );
+  }, [isGeoLocationSupported]);
+
+  // Handle search location from LocationPrompt
+  const handleSearchLocation = useCallback(async (address: string) => {
+    setIsGettingLocation(true);
+    setLocationError(null);
+
+    const coordinates = await geocodeAddress(address);
+
+    if (coordinates) {
+      setMapCenter(coordinates);
+      setSearchOrigin(coordinates); // Set as new search origin
+
+      const newFilters: FilterValues = {
+        ...INITIAL_FILTERS,
+        address: address,
+      };
+      setFilters(newFilters);
+      setAppliedFilters(newFilters);
+    } else {
+      setLocationError("Không tìm thấy địa chỉ. Vui lòng thử lại.");
+    }
+
+    setIsGettingLocation(false);
   }, []);
 
   const handleFilterChange = useCallback(
@@ -210,13 +264,13 @@ export default function Home() {
   const handleApplyFilters = useCallback(async () => {
     // Copy current filters to appliedFilters - this triggers the API call
     setAppliedFilters({ ...filters });
-    console.log("Applied filters:", filters);
 
     // Geocode the address to get coordinates and move map
     if (filters.address) {
       const coordinates = await geocodeAddress(filters.address);
       if (coordinates) {
         setMapCenter(coordinates);
+        setSearchOrigin(coordinates); // Set as new search origin when applying filter
       }
     }
   }, [filters]);
@@ -225,11 +279,12 @@ export default function Home() {
     setFilters(INITIAL_FILTERS);
     setAppliedFilters(INITIAL_FILTERS);
     setSelectedRoom(null);
-    setMapCenter(DEFAULT_CENTER);
+    setMapCenter(null);
+    setSearchOrigin(null); // Reset search origin too
     setUserLocation(null);
   }, []);
 
-  // Open modal only (from RoomCard click or tooltip "Xem chi tiết")
+  // Open modal only (from tooltip "Xem chi tiết")
   const handleOpenRoomModal = useCallback((room: RoomFeature) => {
     setModalRoom(room);
     setIsModalOpen(true);
@@ -240,8 +295,26 @@ export default function Home() {
     setSelectedRoom(room);
   }, []);
 
+  // Fly to room and select it (from RoomCard click)
+  const handleFlyToRoom = useCallback((room: RoomFeature) => {
+    setSelectedRoom(room);
+    // Fly to room location
+    const [lng, lat] = room.geometry.coordinates;
+    setMapCenter([lng, lat]);
+  }, []);
+
   const handleModalOpenChange = useCallback((open: boolean) => {
     setIsModalOpen(open);
+  }, []);
+
+  // Handle map bounds change (zoom/drag) - update radius and trigger API call
+  const handleMapBoundsChange = useCallback((boundsInfo: MapBoundsInfo) => {
+    // Update current radius from map
+    setCurrentMapRadius(boundsInfo.radius);
+
+    // Only trigger API refetch if we have applied filters already
+    // The queryParams dependency will cause useRooms to refetch automatically
+    // when currentMapRadius changes
   }, []);
 
   return (
@@ -252,9 +325,11 @@ export default function Home() {
         selectedRoom={selectedRoom}
         onRoomSelect={handleRoomSelect}
         onOpenRoomModal={handleOpenRoomModal}
+        onMapBoundsChange={handleMapBoundsChange}
         isLoading={isLoading}
         center={mapCenter}
         userLocation={userLocation}
+        searchOrigin={searchOrigin}
       />
 
       {/* Filter Bar - Left side */}
@@ -272,7 +347,7 @@ export default function Home() {
       <RoomListSidebar
         rooms={rooms}
         selectedRoom={selectedRoom}
-        onRoomSelect={handleOpenRoomModal}
+        onRoomSelect={handleFlyToRoom}
         isLoading={isLoading}
         error={error}
       />
@@ -282,6 +357,16 @@ export default function Home() {
         room={modalRoom}
         open={isModalOpen}
         onOpenChange={handleModalOpenChange}
+      />
+
+      {/* Location Prompt - shown when user needs to manually input location */}
+      <LocationPrompt
+        open={showLocationPrompt && !mapCenter}
+        isGettingLocation={isGettingLocation}
+        locationError={locationError}
+        onRequestGPS={handleGetCurrentLocation}
+        onSearchLocation={handleSearchLocation}
+        onClose={() => setShowLocationPrompt(false)}
       />
     </div>
   );

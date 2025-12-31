@@ -26,6 +26,7 @@ interface AddressSearchBoxProps {
   onGetCurrentLocation: () => void;
   isGettingLocation: boolean;
   placeholder?: string;
+  onAddressSelect?: (address: string) => void; // Called when user selects an address from dropdown
 }
 
 const AddressSearchBox = ({
@@ -34,6 +35,7 @@ const AddressSearchBox = ({
   onGetCurrentLocation,
   isGettingLocation,
   placeholder = "Nhập địa chỉ hoặc sử dụng GPS",
+  onAddressSelect,
 }: AddressSearchBoxProps) => {
   const handleRetrieve = useCallback(
     (result: {
@@ -53,9 +55,11 @@ const AddressSearchBox = ({
           feature.properties.name ||
           "";
         onChange(address);
+        // Call onAddressSelect if provided (for LocationPrompt use case)
+        onAddressSelect?.(address);
       }
     },
-    [onChange]
+    [onChange, onAddressSelect]
   );
 
   return (

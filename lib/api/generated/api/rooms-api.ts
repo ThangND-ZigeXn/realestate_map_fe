@@ -34,7 +34,7 @@ export const RoomsApiAxiosParamCreator = function (configuration?: Configuration
         /**
          * Get a list of rental rooms with optional geographic and attribute filters
          * @summary List rooms
-         * @param {string} [address] Address to search around (e.g., \&quot;Quan Dong Da, Ha Noi\&quot;)
+         * @param {string} [address] Address to search around (e.g., \&quot;Quận Đống Đa, Hà Nội\&quot;)
          * @param {number} [addressRadius] Search radius in meters when using address (default: 5000, max: 50000)
          * @param {number} [north] Northern latitude for bounding box search
          * @param {number} [south] Southern latitude for bounding box search
@@ -45,9 +45,9 @@ export const RoomsApiAxiosParamCreator = function (configuration?: Configuration
          * @param {number} [radius] Radius in meters for radius search (max: 50000)
          * @param {number} [minPrice] Minimum price filter
          * @param {number} [maxPrice] Maximum price filter
-         * @param {number} [minArea] Minimum area filter (m2)
-         * @param {number} [maxArea] Maximum area filter (m2)
-         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type: room, studio, or apartment
+         * @param {number} [minArea] Minimum area filter (m²)
+         * @param {number} [maxArea] Maximum area filter (m²)
+         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type:  * &#x60;room&#x60;   * &#x60;studio&#x60;   * &#x60;apartment&#x60;   
          * @param {ApiV1RoomsGetStatusEnum} [status] Filter by status
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -183,7 +183,7 @@ export const RoomsApiFp = function(configuration?: Configuration) {
         /**
          * Get a list of rental rooms with optional geographic and attribute filters
          * @summary List rooms
-         * @param {string} [address] Address to search around (e.g., \&quot;Quan Dong Da, Ha Noi\&quot;)
+         * @param {string} [address] Address to search around (e.g., \&quot;Quận Đống Đa, Hà Nội\&quot;)
          * @param {number} [addressRadius] Search radius in meters when using address (default: 5000, max: 50000)
          * @param {number} [north] Northern latitude for bounding box search
          * @param {number} [south] Southern latitude for bounding box search
@@ -194,9 +194,9 @@ export const RoomsApiFp = function(configuration?: Configuration) {
          * @param {number} [radius] Radius in meters for radius search (max: 50000)
          * @param {number} [minPrice] Minimum price filter
          * @param {number} [maxPrice] Maximum price filter
-         * @param {number} [minArea] Minimum area filter (m2)
-         * @param {number} [maxArea] Maximum area filter (m2)
-         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type: room, studio, or apartment
+         * @param {number} [minArea] Minimum area filter (m²)
+         * @param {number} [maxArea] Maximum area filter (m²)
+         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type:  * &#x60;room&#x60;   * &#x60;studio&#x60;   * &#x60;apartment&#x60;   
          * @param {ApiV1RoomsGetStatusEnum} [status] Filter by status
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -233,7 +233,7 @@ export const RoomsApiFactory = function (configuration?: Configuration, basePath
         /**
          * Get a list of rental rooms with optional geographic and attribute filters
          * @summary List rooms
-         * @param {string} [address] Address to search around (e.g., \&quot;Quan Dong Da, Ha Noi\&quot;)
+         * @param {string} [address] Address to search around (e.g., \&quot;Quận Đống Đa, Hà Nội\&quot;)
          * @param {number} [addressRadius] Search radius in meters when using address (default: 5000, max: 50000)
          * @param {number} [north] Northern latitude for bounding box search
          * @param {number} [south] Southern latitude for bounding box search
@@ -244,9 +244,9 @@ export const RoomsApiFactory = function (configuration?: Configuration, basePath
          * @param {number} [radius] Radius in meters for radius search (max: 50000)
          * @param {number} [minPrice] Minimum price filter
          * @param {number} [maxPrice] Maximum price filter
-         * @param {number} [minArea] Minimum area filter (m2)
-         * @param {number} [maxArea] Maximum area filter (m2)
-         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type: room, studio, or apartment
+         * @param {number} [minArea] Minimum area filter (m²)
+         * @param {number} [maxArea] Maximum area filter (m²)
+         * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type:  * &#x60;room&#x60;   * &#x60;studio&#x60;   * &#x60;apartment&#x60;   
          * @param {ApiV1RoomsGetStatusEnum} [status] Filter by status
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -277,7 +277,7 @@ export class RoomsApi extends BaseAPI {
     /**
      * Get a list of rental rooms with optional geographic and attribute filters
      * @summary List rooms
-     * @param {string} [address] Address to search around (e.g., \&quot;Quan Dong Da, Ha Noi\&quot;)
+     * @param {string} [address] Address to search around (e.g., \&quot;Quận Đống Đa, Hà Nội\&quot;)
      * @param {number} [addressRadius] Search radius in meters when using address (default: 5000, max: 50000)
      * @param {number} [north] Northern latitude for bounding box search
      * @param {number} [south] Southern latitude for bounding box search
@@ -288,9 +288,9 @@ export class RoomsApi extends BaseAPI {
      * @param {number} [radius] Radius in meters for radius search (max: 50000)
      * @param {number} [minPrice] Minimum price filter
      * @param {number} [maxPrice] Maximum price filter
-     * @param {number} [minArea] Minimum area filter (m2)
-     * @param {number} [maxArea] Maximum area filter (m2)
-     * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type: room, studio, or apartment
+     * @param {number} [minArea] Minimum area filter (m²)
+     * @param {number} [maxArea] Maximum area filter (m²)
+     * @param {ApiV1RoomsGetRoomTypeEnum} [roomType] Filter by room type:  * &#x60;room&#x60;   * &#x60;studio&#x60;   * &#x60;apartment&#x60;   
      * @param {ApiV1RoomsGetStatusEnum} [status] Filter by status
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}

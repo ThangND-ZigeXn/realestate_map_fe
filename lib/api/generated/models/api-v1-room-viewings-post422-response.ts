@@ -14,8 +14,17 @@
 
 
 
-export * from './api/addresses-api';
-export * from './api/room-images-api';
-export * from './api/room-viewings-api';
-export * from './api/rooms-api';
+/**
+ * 
+ * @export
+ * @interface ApiV1RoomViewingsPost422Response
+ */
+export interface ApiV1RoomViewingsPost422Response {
+    /**
+     * 
+     * @type {{ [key: string]: Array<string>; }}
+     * @memberof ApiV1RoomViewingsPost422Response
+     */
+    'errors'?: { [key: string]: Array<string>; };
+}
 

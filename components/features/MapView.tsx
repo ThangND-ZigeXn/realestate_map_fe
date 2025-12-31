@@ -6,21 +6,85 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { RoomFeature } from "@/types/room";
+import { MapBoundsInfo, RoomFeature } from "@/types/room";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
-// Default center (Ho Chi Minh City)
-const DEFAULT_CENTER: [number, number] = [106.700806, 10.773884];
+const DEFAULT_ZOOM = 16;
+
+// Radius constraints (in meters)
+const MIN_RADIUS = 5000; // Minimum 5km
+const MAX_RADIUS = 50000; // Maximum 50km (API limit)
+
+// Debounce time for map bounds change (ms)
+const BOUNDS_CHANGE_DEBOUNCE = 800;
+
+// Calculate raw radius in meters from map bounds (without clamping)
+// This calculates the approximate radius that covers the visible map area
+function calculateRawRadiusFromBounds(map: mapboxgl.Map): number {
+  const bounds = map.getBounds();
+  const center = map.getCenter();
+
+  // Get the distance from center to corner of the visible area
+  // Using the Haversine formula for accuracy
+  if (!bounds) return 0;
+
+  const ne = bounds.getNorthEast();
+
+  const R = 6371000; // Earth's radius in meters
+  const lat1 = (center.lat * Math.PI) / 180;
+  const lat2 = (ne.lat * Math.PI) / 180;
+  const deltaLat = ((ne.lat - center.lat) * Math.PI) / 180;
+  const deltaLng = ((ne.lng - center.lng) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
+}
+
+// Clamp radius to min/max bounds
+function clampRadius(radius: number): number {
+  return Math.max(MIN_RADIUS, Math.min(radius, MAX_RADIUS));
+}
+
+// Calculate distance between two points using Haversine formula
+function calculateDistanceBetweenPoints(
+  point1: [number, number], // [lng, lat]
+  point2: [number, number] // [lng, lat]
+): number {
+  const R = 6371000; // Earth's radius in meters
+  const lat1 = (point1[1] * Math.PI) / 180;
+  const lat2 = (point2[1] * Math.PI) / 180;
+  const deltaLat = ((point2[1] - point1[1]) * Math.PI) / 180;
+  const deltaLng = ((point2[0] - point1[0]) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
+}
 
 interface MapViewProps {
   rooms?: RoomFeature[];
   selectedRoom?: RoomFeature | null;
   onRoomSelect?: (room: RoomFeature) => void;
   onOpenRoomModal?: (room: RoomFeature) => void;
+  onMapBoundsChange?: (boundsInfo: MapBoundsInfo) => void; // Callback when map bounds change
   isLoading?: boolean;
-  center?: [number, number]; // [longitude, latitude]
+  center?: [number, number] | null; // [longitude, latitude] - null means waiting for location
   userLocation?: [number, number] | null; // User's current GPS location [longitude, latitude]
+  searchOrigin?: [number, number] | null; // Original search location [longitude, latitude] - used to calculate distance when dragging
 }
 
 export default function MapView({
@@ -28,20 +92,45 @@ export default function MapView({
   selectedRoom,
   onRoomSelect,
   onOpenRoomModal,
+  onMapBoundsChange,
   isLoading = false, // eslint-disable-line @typescript-eslint/no-unused-vars
-  center = DEFAULT_CENTER,
+  center = null,
   userLocation = null,
+  searchOrigin = null,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const prevCenterRef = useRef<[number, number]>(center);
+  const prevCenterRef = useRef<[number, number] | null>(center);
+  const onMapBoundsChangeRef = useRef(onMapBoundsChange);
+  const searchOriginRef = useRef(searchOrigin);
 
-  // Initialize map
+  // Keep callback ref updated
   useEffect(() => {
-    if (map.current || !mapContainer.current) return;
+    onMapBoundsChangeRef.current = onMapBoundsChange;
+  }, [onMapBoundsChange]);
+
+  // Keep searchOrigin ref updated
+  useEffect(() => {
+    searchOriginRef.current = searchOrigin;
+  }, [searchOrigin]);
+
+  // Ref to track if map has been initialized (to prevent re-init on center change)
+  const mapInitializedRef = useRef(false);
+
+  // Initialize map only when center is available (runs only once)
+  useEffect(() => {
+    // Don't initialize until we have a center
+    if (!center) return;
+    // Already initialized - don't reinitialize when center changes
+    if (mapInitializedRef.current) return;
+    if (map.current) return;
+    if (!mapContainer.current) return;
+
+    // Mark as initialized to prevent re-running this effect
+    mapInitializedRef.current = true;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
@@ -49,9 +138,12 @@ export default function MapView({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
       center: center,
-      zoom: 12,
+      zoom: DEFAULT_ZOOM,
       attributionControl: false,
     });
+
+    // Store initial center
+    prevCenterRef.current = center;
 
     // Add navigation controls
     map.current.addControl(new mapboxgl.NavigationControl(), "bottom-right");
@@ -71,23 +163,116 @@ export default function MapView({
     // Add scale control
     map.current.addControl(new mapboxgl.ScaleControl(), "bottom-left");
 
+    // Debounce timer for map bounds change
+    let boundsChangeTimer: ReturnType<typeof setTimeout> | null = null;
+    // Track last emitted radius to avoid unnecessary API calls
+    let lastEmittedRadius: number | null = null;
+
+    // Emit bounds info when map stops moving (after zoom/drag)
+    const handleMoveEnd = () => {
+      if (!map.current) return;
+
+      // Debounce to avoid too many API calls
+      if (boundsChangeTimer) {
+        clearTimeout(boundsChangeTimer);
+      }
+
+      boundsChangeTimer = setTimeout(() => {
+        if (!map.current) return;
+
+        const mapCenter = map.current.getCenter();
+        const zoom = map.current.getZoom();
+        const viewportRadius = calculateRawRadiusFromBounds(map.current);
+
+        // Calculate distance from search origin to current map center
+        // This ensures we fetch data that covers both the origin and the dragged position
+        let distanceFromOrigin = 0;
+        if (searchOriginRef.current) {
+          distanceFromOrigin = calculateDistanceBetweenPoints(
+            searchOriginRef.current,
+            [mapCenter.lng, mapCenter.lat]
+          );
+        }
+
+        // Total radius = distance from origin + viewport radius
+        // This ensures all rooms between origin and current view are fetched
+        const totalRadius = distanceFromOrigin + viewportRadius;
+
+        // If total radius < MIN_RADIUS, use MIN_RADIUS
+        // The API requires at least MIN_RADIUS
+        const clampedRadius = clampRadius(totalRadius);
+
+        // Skip if radius hasn't changed significantly (within 10% tolerance)
+        if (lastEmittedRadius !== null) {
+          const radiusDiff = Math.abs(clampedRadius - lastEmittedRadius);
+          const threshold = lastEmittedRadius * 0.1; // 10% threshold
+          if (radiusDiff < threshold) {
+            return;
+          }
+        }
+
+        lastEmittedRadius = clampedRadius;
+
+        onMapBoundsChangeRef.current?.({
+          center: [mapCenter.lng, mapCenter.lat],
+          zoom,
+          radius: clampedRadius,
+        });
+      }, BOUNDS_CHANGE_DEBOUNCE);
+    };
+
     map.current.on("load", () => {
       setMapLoaded(true);
+
+      // Emit initial bounds after map loads
+      if (map.current) {
+        const mapCenter = map.current.getCenter();
+        const zoom = map.current.getZoom();
+        const rawRadius = calculateRawRadiusFromBounds(map.current);
+        const clampedRadius = clampRadius(rawRadius);
+
+        lastEmittedRadius = clampedRadius;
+
+        onMapBoundsChangeRef.current?.({
+          center: [mapCenter.lng, mapCenter.lat],
+          zoom,
+          radius: clampedRadius,
+        });
+      }
     });
 
-    return () => {
-      map.current?.remove();
-      map.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Listen for map movement end (after zoom or drag)
+    map.current.on("moveend", handleMoveEnd);
 
-  // Fly to new center when it changes
+    // Store cleanup functions in refs to be called on unmount
+    const currentMap = map.current;
+    const currentTimer = boundsChangeTimer;
+
+    return () => {
+      if (currentTimer) {
+        clearTimeout(currentTimer);
+      }
+      currentMap?.off("moveend", handleMoveEnd);
+      currentMap?.remove();
+      map.current = null;
+      mapInitializedRef.current = false;
+    };
+    // Only run this effect once when center becomes available for the first time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!center]); // Use !!center to only trigger when center goes from null to non-null
+
+  // Fly to new center when it changes (after initial load)
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || !center) return;
 
     // Check if center actually changed
-    const [prevLng, prevLat] = prevCenterRef.current;
+    const prev = prevCenterRef.current;
+    if (!prev) {
+      prevCenterRef.current = center;
+      return;
+    }
+
+    const [prevLng, prevLat] = prev;
     const [newLng, newLat] = center;
 
     if (prevLng !== newLng || prevLat !== newLat) {
@@ -214,7 +399,7 @@ export default function MapView({
         }, 0);
       });
 
-      // Handle marker click - toggle popup and select room (highlight)
+      // Handle marker click - open popup and fly to room
       el.addEventListener("click", (e) => {
         e.stopPropagation();
 
@@ -229,7 +414,14 @@ export default function MapView({
         // Select this room (for highlighting)
         onRoomSelect?.(room);
 
-        // Toggle this popup
+        // Fly to this room
+        map.current?.flyTo({
+          center: [longitude, latitude],
+          zoom: 17,
+          duration: 1000,
+        });
+
+        // Open popup (not toggle - always open on click)
         if (!popup.isOpen()) {
           marker.togglePopup();
         }
@@ -238,6 +430,32 @@ export default function MapView({
       markersRef.current.push(marker);
     });
   }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal]);
+
+  // Open popup for selected room when it changes from external source (e.g., RoomCard click)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !selectedRoom) return;
+
+    // Find the marker for selected room and open its popup
+    const markerIndex = rooms.findIndex(
+      (r) => r.properties.id === selectedRoom.properties.id
+    );
+
+    if (markerIndex !== -1 && markersRef.current[markerIndex]) {
+      // Close all other popups first
+      markersRef.current.forEach((m, i) => {
+        const p = m.getPopup();
+        if (p && p.isOpen() && i !== markerIndex) {
+          p.remove();
+        }
+      });
+
+      // Open popup for selected room
+      const popup = markersRef.current[markerIndex].getPopup();
+      if (popup && !popup.isOpen()) {
+        markersRef.current[markerIndex].togglePopup();
+      }
+    }
+  }, [selectedRoom, rooms, mapLoaded]);
 
   return (
     <>
@@ -420,6 +638,17 @@ export default function MapView({
         }
       `}</style>
       <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
+      {/* Background with loading spinner when no center (map not initialized) */}
+      {!center && (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200 z-10 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">
+              Đang xác định vị trí...
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
