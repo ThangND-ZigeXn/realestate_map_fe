@@ -3,9 +3,11 @@
 import "@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+import { useQueryClient } from "@tanstack/react-query";
 import mapboxgl from "mapbox-gl";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { roomImagesConnect } from "@/lib/api/axios";
 import type { DirectionsRoute } from "@/lib/mapbox-directions";
 import { MapBoundsInfo, RoomFeature } from "@/types/room";
 
@@ -119,6 +121,35 @@ export default function MapView({
   const onMapBoundsChangeRef = useRef(onMapBoundsChange);
   const searchOriginRef = useRef(searchOrigin);
   const routeLayerAdded = useRef(false);
+
+  // Use React Query's queryClient to share cache with RoomCard
+  const queryClient = useQueryClient();
+
+  // Function to get or fetch room image - uses React Query cache for consistency
+  const getRoomImage = useCallback(async (roomType: string, roomId: number): Promise<string | null> => {
+    const queryKey = ["room-image", roomType, roomId];
+
+    // Check if already in React Query cache
+    const cachedData = queryClient.getQueryData<{ image_url: string }>(queryKey);
+    if (cachedData?.image_url) {
+      return cachedData.image_url;
+    }
+
+    try {
+      // Fetch and store in React Query cache
+      const response = await roomImagesConnect.apiV1RoomImagesRandomGet(
+        roomType as "room" | "studio" | "apartment"
+      );
+      const data = response.data;
+
+      // Store in React Query cache so RoomCard and popup use the same image
+      queryClient.setQueryData(queryKey, data);
+
+      return data.image_url;
+    } catch {
+      return null;
+    }
+  }, [queryClient]);
 
   // Keep callback ref updated
   useEffect(() => {
@@ -502,14 +533,19 @@ export default function MapView({
         </div>
       `;
 
-      // Create popup with "Xem chi tiết" and "Chỉ đường" buttons
+      // Create popup with image, "Xem chi tiết" and "Chỉ đường" buttons
       const popup = new mapboxgl.Popup({
         offset: 25,
         closeButton: true,
         closeOnClick: false,
-        maxWidth: "280px",
+        maxWidth: "300px",
       }).setHTML(`
         <div class="room-popup" data-room-id="${properties.id}">
+          <div class="popup-image-container" data-room-id="${properties.id}">
+            <div class="popup-image-placeholder">
+              <div class="popup-image-spinner"></div>
+            </div>
+          </div>
           <div class="popup-content">
             <h3 class="popup-title">${properties.title}</h3>
             <p class="popup-address">${properties.address || ""}</p>
@@ -540,10 +576,29 @@ export default function MapView({
         .setPopup(popup)
         .addTo(map.current!);
 
-      // Handle popup open to attach click handlers for buttons
+      // Handle popup open to attach click handlers for buttons and load image
       popup.on("open", () => {
         // Use setTimeout to ensure DOM is ready
-        setTimeout(() => {
+        setTimeout(async () => {
+          // Load room image
+          const imageContainer = document.querySelector(
+            `.popup-image-container[data-room-id="${properties.id}"]`
+          );
+          if (imageContainer) {
+            const imageUrl = await getRoomImage(properties.roomType, properties.id);
+            if (imageUrl) {
+              imageContainer.innerHTML = `
+                <img src="${imageUrl}" alt="${properties.title}" class="popup-image" />
+              `;
+            } else {
+              imageContainer.innerHTML = `
+                <div class="popup-image-placeholder">
+                  <span class="popup-no-image">🏠</span>
+                </div>
+              `;
+            }
+          }
+
           // "Xem chi tiết" button
           const detailBtn = document.querySelector(
             `.popup-view-detail-btn[data-room-id="${properties.id}"]`
@@ -600,7 +655,7 @@ export default function MapView({
 
       markersRef.current.push(marker);
     });
-  }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal, onShowDirections]);
+  }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal, onShowDirections, getRoomImage]);
 
   // Open popup for selected room when it changes from external source (e.g., RoomCard click)
   useEffect(() => {
@@ -742,6 +797,47 @@ export default function MapView({
 
         .room-popup {
           font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        .popup-image-container {
+          width: 100%;
+          height: 120px;
+          overflow: hidden;
+        }
+
+        .popup-image {
+          width: 100%;
+          height: 120px;
+          object-fit: cover;
+        }
+
+        .popup-image-placeholder {
+          width: 100%;
+          height: 120px;
+          background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .popup-image-spinner {
+          width: 24px;
+          height: 24px;
+          border: 2px solid #e5e7eb;
+          border-top-color: #2563eb;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        .popup-no-image {
+          font-size: 32px;
+          opacity: 0.5;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
 
         .popup-content {

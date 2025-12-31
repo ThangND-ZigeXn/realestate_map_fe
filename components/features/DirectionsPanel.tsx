@@ -1,13 +1,22 @@
 "use client";
 
-import { Car, Footprints, Bike, X, Navigation, Loader2, MapPin, Crosshair } from "lucide-react";
+import {
+  Bike,
+  Car,
+  Crosshair,
+  Footprints,
+  Loader2,
+  MapPin,
+  Navigation,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  getDirections,
   formatDistance,
   formatDuration,
+  getDirections,
   type DirectionsRoute,
   type TravelMode,
 } from "@/lib/mapbox-directions";
@@ -85,7 +94,7 @@ export default function DirectionsPanel({
   if (!room) return null;
 
   return (
-    <div className="fixed top-20 left-4 z-[9999] w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed top-20 left-4 z-49 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="flex items-center gap-2">
@@ -241,11 +250,7 @@ export default function DirectionsPanel({
             <p className="text-slate-500 text-sm mb-2">
               Chọn điểm xuất phát để xem đường đi
             </p>
-            <Button
-              size="sm"
-              onClick={onRequestPickOrigin}
-              className="gap-1"
-            >
+            <Button size="sm" onClick={onRequestPickOrigin} className="gap-1">
               <MapPin className="h-4 w-4" />
               Chọn trên bản đồ
             </Button>
@@ -255,4 +260,3 @@ export default function DirectionsPanel({
     </div>
   );
 }
-

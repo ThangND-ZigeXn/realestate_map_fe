@@ -1,6 +1,7 @@
 "use client";
 
-import { GripVertical, MapPin, Phone, Ruler } from "lucide-react";
+import { GripVertical, ImageIcon, MapPin, Phone, Ruler } from "lucide-react";
+import Image from "next/image";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import useRoomImage from "@/lib/react-query/room-images/use-room-image";
 import { cn } from "@/lib/utils";
 import { RoomFeature } from "@/types/room";
 
@@ -20,8 +23,19 @@ interface RoomCardProps {
   draggable?: boolean;
 }
 
-const RoomCard = ({ room, isSelected, onClick, draggable = false }: RoomCardProps) => {
+const RoomCard = ({
+  room,
+  isSelected,
+  onClick,
+  draggable = false,
+}: RoomCardProps) => {
   const { properties } = room;
+
+  // Fetch room image based on room type
+  const { data: imageData, isLoading: isImageLoading } = useRoomImage(
+    properties.roomType,
+    properties.id
+  );
 
   const getRoomTypeLabel = (type: string) => {
     const types: Record<string, string> = {
@@ -48,21 +62,40 @@ const RoomCard = ({ room, isSelected, onClick, draggable = false }: RoomCardProp
       draggable={draggable}
       onDragStart={handleDragStart}
       className={cn(
-        "cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 pt-0",
+        "cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 pt-0 overflow-hidden",
         isSelected && "border-primary ring-2 ring-primary/20 shadow-md",
         draggable && "cursor-grab active:cursor-grabbing"
       )}
       onClick={onClick}
     >
-      {/* Header with badges */}
-      <div className="relative p-3 pb-0">
-        <div className="flex items-center gap-2">
+      {/* Room Image */}
+      <div className="relative h-32 w-full bg-muted">
+        {isImageLoading ? (
+          <Skeleton className="h-full w-full" />
+        ) : imageData?.image_url ? (
+          <Image
+            src={imageData.image_url}
+            alt={properties.title}
+            fill
+            loading="lazy"
+            className="object-cover"
+            unoptimized
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-muted">
+            <ImageIcon className="size-8 text-muted-foreground" />
+          </div>
+        )}
+        {/* Badges overlay on image */}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5">
           {draggable && (
-            <GripVertical className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            <div className="bg-white/90 rounded p-1">
+              <GripVertical className="h-4 w-4 text-slate-400" />
+            </div>
           )}
           <Badge
             variant="secondary"
-            className="bg-primary/10 text-primary border-0"
+            className="bg-white/90 text-primary border-0 text-xs"
           >
             {getRoomTypeLabel(properties.roomType)}
           </Badge>
@@ -70,23 +103,24 @@ const RoomCard = ({ room, isSelected, onClick, draggable = false }: RoomCardProp
             variant={
               properties.status === "available" ? "default" : "secondary"
             }
-            className={
+            className={cn(
+              "border-0 text-xs",
               properties.status === "available"
-                ? "bg-emerald-100 text-emerald-700 border-0"
-                : "bg-gray-100 text-gray-600 border-0"
-            }
+                ? "bg-emerald-500/90 text-white"
+                : "bg-gray-500/90 text-white"
+            )}
           >
             {getStatusLabel(properties.status)}
           </Badge>
-          {isSelected && (
-            <Badge className="ml-auto bg-primary text-primary-foreground">
-              Đang xem
-            </Badge>
-          )}
         </div>
+        {isSelected && (
+          <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs">
+            Đang xem
+          </Badge>
+        )}
       </div>
 
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 pt-3">
         <CardTitle className="text-base line-clamp-1">
           {properties.title}
         </CardTitle>

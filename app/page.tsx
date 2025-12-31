@@ -9,6 +9,7 @@ import LocationPrompt from "@/components/features/LocationPrompt";
 import MapView from "@/components/features/MapView";
 import RoomDetailModal from "@/components/features/RoomDetailModal";
 import RoomListSidebar from "@/components/features/RoomListSidebar";
+import RoomViewingsSheet from "@/components/features/RoomViewingsSheet";
 import type { DirectionsRoute } from "@/lib/mapbox-directions";
 import { useRooms } from "@/lib/react-query/rooms/use-room";
 import type { FilterValues, MapBoundsInfo, RoomFeature } from "@/types/room";
@@ -121,10 +122,16 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Directions state
-  const [directionsRoom, setDirectionsRoom] = useState<RoomFeature | null>(null);
-  const [currentRoute, setCurrentRoute] = useState<DirectionsRoute | null>(null);
+  const [directionsRoom, setDirectionsRoom] = useState<RoomFeature | null>(
+    null
+  );
+  const [currentRoute, setCurrentRoute] = useState<DirectionsRoute | null>(
+    null
+  );
   const [isPickingOrigin, setIsPickingOrigin] = useState(false);
-  const [customOrigin, setCustomOrigin] = useState<[number, number] | null>(null);
+  const [customOrigin, setCustomOrigin] = useState<[number, number] | null>(
+    null
+  );
 
   // Build query params from appliedFilters - filter out empty/undefined values
   const queryParams =
@@ -342,7 +349,9 @@ export default function Home() {
   }, []);
 
   const handleRemoveFromComparison = useCallback((roomId: number) => {
-    setComparisonRooms((prev) => prev.filter((r) => r.properties.id !== roomId));
+    setComparisonRooms((prev) =>
+      prev.filter((r) => r.properties.id !== roomId)
+    );
   }, []);
 
   const handleClearComparison = useCallback(() => {
@@ -414,7 +423,7 @@ export default function Home() {
 
       {/* Picking Origin Hint */}
       {isPickingOrigin && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-49 bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
           <span>👆 Click vào bản đồ để chọn điểm xuất phát</span>
           <button
             onClick={() => setIsPickingOrigin(false)}
@@ -448,15 +457,18 @@ export default function Home() {
         onResetFilters={handleResetFilters}
       />
 
-      {/* Room List Sidebar - Right side */}
-      <RoomListSidebar
-        rooms={rooms}
-        selectedRoom={selectedRoom}
-        onRoomSelect={handleFlyToRoom}
-        isLoading={isLoading}
-        error={error}
-        onOpenChange={setIsSidebarOpen}
-      />
+      {/* Room List Sidebar and Viewings - Right side */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <RoomViewingsSheet />
+        <RoomListSidebar
+          rooms={rooms}
+          selectedRoom={selectedRoom}
+          onRoomSelect={handleFlyToRoom}
+          isLoading={isLoading}
+          error={error}
+          onOpenChange={setIsSidebarOpen}
+        />
+      </div>
 
       {/* Room Detail Modal */}
       <RoomDetailModal

@@ -54,7 +54,7 @@ const RoomListSidebar = ({
       <SheetTrigger asChild>
         <Button
           variant="outline"
-          className="cursor-pointer absolute top-4 right-4 z-10 gap-2"
+          className="cursor-pointer gap-2"
         >
           <Building2 className="size-4" />
           <span className="hidden sm:inline">Danh sách</span>

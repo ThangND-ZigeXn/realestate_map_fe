@@ -138,14 +138,14 @@ export default function AIComparisonBox({
   return (
     <div
       className={cn(
-        "fixed bottom-4 z-[9999] bg-white rounded-xl shadow-2xl border border-slate-200 transition-all duration-300",
+        "fixed bottom-4 z-49 bg-white rounded-xl shadow-2xl border border-slate-200 transition-all duration-300",
         isExpanded ? "h-[50vh] max-h-[600px]" : "h-14"
       )}
       style={{
         // Position: right side, move left when sidebar opens
         right: isSidebarOpen ? `${SIDEBAR_WIDTH + 30}px` : "66px",
         // Width: shrink when sidebar opens
-        width: "500px"
+        width: "500px",
       }}
     >
       {/* Header - Always visible */}
@@ -202,7 +202,9 @@ export default function AIComparisonBox({
                 <p className="text-slate-600 text-base font-medium">
                   Kéo phòng từ danh sách vào đây
                 </p>
-                <p className="text-slate-400 text-sm mt-2">Tối đa 3 phòng để so sánh</p>
+                <p className="text-slate-400 text-sm mt-2">
+                  Tối đa 3 phòng để so sánh
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -302,7 +304,9 @@ export default function AIComparisonBox({
               {/* Best Choice */}
               {(() => {
                 const bestRoom = selectedRooms.find(
-                  (r) => r.properties.id === analysisResult.analysis.bestChoice.roomId
+                  (r) =>
+                    r.properties.id ===
+                    analysisResult.analysis.bestChoice.roomId
                 );
                 return (
                   <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-4 border border-emerald-200">
@@ -389,7 +393,9 @@ export default function AIComparisonBox({
                         <span className="text-emerald-600">
                           ✓ {ranking.pros[0]}
                         </span>
-                        <span className="text-red-500">✗ {ranking.cons[0]}</span>
+                        <span className="text-red-500">
+                          ✗ {ranking.cons[0]}
+                        </span>
                       </div>
                     </div>
                   );
@@ -409,4 +415,3 @@ export default function AIComparisonBox({
     </div>
   );
 }
-

@@ -66,7 +66,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
       if (!draggedRoom) return;
 
       // Check if room is already selected
-      if (selectedRooms.some((r) => r.properties.id === draggedRoom.properties.id)) {
+      if (
+        selectedRooms.some((r) => r.properties.id === draggedRoom.properties.id)
+      ) {
         return;
       }
 
@@ -112,7 +114,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
       const result = await analyzeRoomsWithGemini({ rooms: roomsForAnalysis });
       setAnalysisResult(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Có lỗi xảy ra khi phân tích");
+      setError(
+        err instanceof Error ? err.message : "Có lỗi xảy ra khi phân tích"
+      );
     } finally {
       setIsAnalyzing(false);
     }
@@ -130,7 +134,7 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
         <SheetTrigger asChild>
           <Button
             size="lg"
-            className="fixed bottom-6 left-6 z-[9999] h-14 w-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 shadow-lg hover:from-violet-700 hover:to-indigo-700 hover:shadow-xl transition-all duration-300"
+            className="fixed bottom-6 left-6 z-49 h-14 w-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 shadow-lg hover:from-violet-700 hover:to-indigo-700 hover:shadow-xl transition-all duration-300"
           >
             <Bot className="h-6 w-6 text-white" />
           </Button>
@@ -138,7 +142,7 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
 
         <SheetContent
           side="left"
-          className="w-full sm:max-w-lg overflow-y-auto bg-slate-50 z-[9999]"
+          className="w-full sm:max-w-lg overflow-y-auto bg-slate-50 z-49"
         >
           <SheetHeader className="pb-4 border-b">
             <SheetTitle className="flex items-center gap-2 text-violet-700">
@@ -165,7 +169,8 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                   draggedRoom
                     ? "border-violet-500 bg-violet-50"
                     : "border-slate-300 bg-white",
-                  selectedRooms.length === 0 && "flex items-center justify-center"
+                  selectedRooms.length === 0 &&
+                    "flex items-center justify-center"
                 )}
               >
                 {selectedRooms.length === 0 ? (
@@ -263,7 +268,8 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                     {
                       selectedRooms.find(
                         (r) =>
-                          r.properties.id === analysisResult.analysis.bestChoice.roomId
+                          r.properties.id ===
+                          analysisResult.analysis.bestChoice.roomId
                       )?.properties.title
                     }
                   </p>
@@ -274,7 +280,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
 
                 {/* Rankings */}
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-700">Xếp hạng chi tiết:</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    Xếp hạng chi tiết:
+                  </p>
                   {analysisResult.analysis.rankings.map((ranking) => (
                     <div
                       key={ranking.id}
@@ -351,7 +359,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                       {/* Pros & Cons */}
                       <div className="flex gap-4 text-xs">
                         <div className="flex-1">
-                          <span className="text-emerald-600 font-medium">Ưu điểm:</span>
+                          <span className="text-emerald-600 font-medium">
+                            Ưu điểm:
+                          </span>
                           <ul className="mt-1 space-y-0.5 text-slate-600">
                             {ranking.pros.slice(0, 2).map((pro, i) => (
                               <li key={i}>• {pro}</li>
@@ -359,7 +369,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                           </ul>
                         </div>
                         <div className="flex-1">
-                          <span className="text-red-600 font-medium">Nhược điểm:</span>
+                          <span className="text-red-600 font-medium">
+                            Nhược điểm:
+                          </span>
                           <ul className="mt-1 space-y-0.5 text-slate-600">
                             {ranking.cons.slice(0, 2).map((con, i) => (
                               <li key={i}>• {con}</li>
@@ -373,7 +385,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
 
                 {/* Summary */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                  <p className="text-sm font-medium text-slate-700 mb-1">Tóm tắt:</p>
+                  <p className="text-sm font-medium text-slate-700 mb-1">
+                    Tóm tắt:
+                  </p>
                   <p className="text-sm text-slate-600">
                     {analysisResult.analysis.comparisonSummary}
                   </p>
@@ -382,7 +396,9 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                 {/* Tips */}
                 {analysisResult.analysis.tips.length > 0 && (
                   <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                    <p className="text-sm font-medium text-blue-700 mb-2">💡 Mẹo:</p>
+                    <p className="text-sm font-medium text-blue-700 mb-2">
+                      💡 Mẹo:
+                    </p>
                     <ul className="text-sm text-blue-600 space-y-1">
                       {analysisResult.analysis.tips.map((tip, i) => (
                         <li key={i}>• {tip}</li>
@@ -423,8 +439,10 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
                           {room.properties.title}
                         </p>
                         <p className="text-xs text-slate-500 truncate">
-                          {formatPrice(room.properties.price)} • {room.properties.area}m²
-                          {room.properties.address && ` • ${room.properties.address}`}
+                          {formatPrice(room.properties.price)} •{" "}
+                          {room.properties.area}m²
+                          {room.properties.address &&
+                            ` • ${room.properties.address}`}
                         </p>
                       </div>
                       <span
@@ -454,4 +472,3 @@ export default function AIAssistant({ rooms }: AIAssistantProps) {
     </>
   );
 }
-
