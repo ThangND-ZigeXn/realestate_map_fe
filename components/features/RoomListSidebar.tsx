@@ -24,6 +24,7 @@ interface RoomListSidebarProps {
   onRoomSelect: (room: RoomFeature) => void;
   isLoading?: boolean;
   error?: Error | null;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 const RoomListSidebar = ({
@@ -32,8 +33,15 @@ const RoomListSidebar = ({
   onRoomSelect,
   isLoading = false,
   error = null,
+  onOpenChange,
 }: RoomListSidebarProps) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Notify parent when sidebar open state changes
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    onOpenChange?.(open);
+  };
 
   const handleRoomCardClick = (room: RoomFeature) => {
     // Call the parent handler to open modal
@@ -42,7 +50,7 @@ const RoomListSidebar = ({
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
+    <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
       <SheetTrigger asChild>
         <Button
           variant="outline"
@@ -103,7 +111,7 @@ const RoomListSidebar = ({
               </div>
             )}
 
-            {/* Room list */}
+            {/* Room list - draggable to AI comparison box */}
             {!isLoading &&
               !error &&
               rooms.map((room) => (
@@ -114,6 +122,7 @@ const RoomListSidebar = ({
                     selectedRoom?.properties.id === room.properties.id
                   }
                   onClick={() => handleRoomCardClick(room)}
+                  draggable={true}
                 />
               ))}
           </div>

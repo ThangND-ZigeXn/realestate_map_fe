@@ -6,6 +6,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useRef, useState } from "react";
 
+import type { DirectionsRoute } from "@/lib/mapbox-directions";
 import { MapBoundsInfo, RoomFeature } from "@/types/room";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -81,10 +82,15 @@ interface MapViewProps {
   onRoomSelect?: (room: RoomFeature) => void;
   onOpenRoomModal?: (room: RoomFeature) => void;
   onMapBoundsChange?: (boundsInfo: MapBoundsInfo) => void; // Callback when map bounds change
+  onShowDirections?: (room: RoomFeature) => void;
   isLoading?: boolean;
   center?: [number, number] | null; // [longitude, latitude] - null means waiting for location
   userLocation?: [number, number] | null; // User's current GPS location [longitude, latitude]
   searchOrigin?: [number, number] | null; // Original search location [longitude, latitude] - used to calculate distance when dragging
+  route?: DirectionsRoute | null; // Route to display on map
+  isPickingOrigin?: boolean; // Mode to pick origin point on map
+  onOriginPicked?: (coords: [number, number]) => void;
+  customOrigin?: [number, number] | null; // Custom origin point for directions
 }
 
 export default function MapView({
@@ -93,19 +99,26 @@ export default function MapView({
   onRoomSelect,
   onOpenRoomModal,
   onMapBoundsChange,
+  onShowDirections,
   isLoading = false, // eslint-disable-line @typescript-eslint/no-unused-vars
   center = null,
   userLocation = null,
   searchOrigin = null,
+  route = null,
+  isPickingOrigin = false,
+  onOriginPicked,
+  customOrigin = null,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const prevCenterRef = useRef<[number, number] | null>(center);
   const onMapBoundsChangeRef = useRef(onMapBoundsChange);
   const searchOriginRef = useRef(searchOrigin);
+  const routeLayerAdded = useRef(false);
 
   // Keep callback ref updated
   useEffect(() => {
@@ -327,6 +340,144 @@ export default function MapView({
     }
   }, [userLocation, mapLoaded]);
 
+  // Handle pick origin mode - click on map to set origin
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const mapInstance = map.current;
+
+    const handleMapClick = (e: mapboxgl.MapMouseEvent) => {
+      if (isPickingOrigin && onOriginPicked) {
+        const { lng, lat } = e.lngLat;
+        onOriginPicked([lng, lat]);
+      }
+    };
+
+    if (isPickingOrigin) {
+      mapInstance.getCanvas().style.cursor = "crosshair";
+      mapInstance.on("click", handleMapClick);
+    } else {
+      mapInstance.getCanvas().style.cursor = "";
+    }
+
+    return () => {
+      mapInstance.off("click", handleMapClick);
+      mapInstance.getCanvas().style.cursor = "";
+    };
+  }, [isPickingOrigin, onOriginPicked, mapLoaded]);
+
+  // Display custom origin marker
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing origin marker
+    if (originMarkerRef.current) {
+      originMarkerRef.current.remove();
+      originMarkerRef.current = null;
+    }
+
+    // Add new origin marker if custom origin is set
+    if (customOrigin) {
+      const [lng, lat] = customOrigin;
+
+      const el = document.createElement("div");
+      el.className = "origin-marker";
+      el.innerHTML = `
+        <div class="origin-marker-container">
+          <div class="origin-marker-icon">📍</div>
+        </div>
+      `;
+
+      originMarkerRef.current = new mapboxgl.Marker(el)
+        .setLngLat([lng, lat])
+        .addTo(map.current);
+    }
+  }, [customOrigin, mapLoaded]);
+
+  // Display route on map
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const mapInstance = map.current;
+
+    // Remove existing route layer and source
+    if (routeLayerAdded.current) {
+      if (mapInstance.getLayer("route-line")) {
+        mapInstance.removeLayer("route-line");
+      }
+      if (mapInstance.getLayer("route-outline")) {
+        mapInstance.removeLayer("route-outline");
+      }
+      if (mapInstance.getSource("route")) {
+        mapInstance.removeSource("route");
+      }
+      routeLayerAdded.current = false;
+    }
+
+    // Add new route if available
+    if (route && route.geometry) {
+      // Add route source
+      mapInstance.addSource("route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: route.geometry,
+        },
+      });
+
+      // Add route outline (for better visibility)
+      mapInstance.addLayer({
+        id: "route-outline",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#1e40af",
+          "line-width": 8,
+          "line-opacity": 0.4,
+        },
+      });
+
+      // Add route line
+      mapInstance.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#3b82f6",
+          "line-width": 5,
+        },
+      });
+
+      routeLayerAdded.current = true;
+
+      // Fit map to show entire route
+      const coordinates = route.geometry.coordinates;
+      if (coordinates.length > 0) {
+        const bounds = coordinates.reduce(
+          (bounds, coord) => bounds.extend(coord as [number, number]),
+          new mapboxgl.LngLatBounds(
+            coordinates[0] as [number, number],
+            coordinates[0] as [number, number]
+          )
+        );
+
+        mapInstance.fitBounds(bounds, {
+          padding: { top: 100, bottom: 100, left: 350, right: 100 },
+          duration: 1000,
+        });
+      }
+    }
+  }, [route, mapLoaded]);
+
   // Add markers for rooms
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -351,7 +502,7 @@ export default function MapView({
         </div>
       `;
 
-      // Create popup with "Xem chi tiết" button
+      // Create popup with "Xem chi tiết" and "Chỉ đường" buttons
       const popup = new mapboxgl.Popup({
         offset: 25,
         closeButton: true,
@@ -368,11 +519,18 @@ export default function MapView({
               )} đ/tháng</span>
               <span class="popup-area">${properties.area || 0} m²</span>
             </div>
-            <button class="popup-view-detail-btn" data-room-id="${
-              properties.id
-            }">
-              Xem chi tiết
-            </button>
+            <div class="popup-buttons">
+              <button class="popup-view-detail-btn" data-room-id="${
+                properties.id
+              }">
+                Xem chi tiết
+              </button>
+              <button class="popup-directions-btn" data-room-id="${
+                properties.id
+              }">
+                🧭 Chỉ đường
+              </button>
+            </div>
           </div>
         </div>
       `);
@@ -382,18 +540,31 @@ export default function MapView({
         .setPopup(popup)
         .addTo(map.current!);
 
-      // Handle popup open to attach click handler for "Xem chi tiết" button
+      // Handle popup open to attach click handlers for buttons
       popup.on("open", () => {
         // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
-          const btn = document.querySelector(
+          // "Xem chi tiết" button
+          const detailBtn = document.querySelector(
             `.popup-view-detail-btn[data-room-id="${properties.id}"]`
           );
-          if (btn) {
-            btn.addEventListener("click", (e) => {
+          if (detailBtn) {
+            detailBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              onOpenRoomModal?.(room); // Open modal only, no fly
-              popup.remove(); // Close popup when opening modal
+              onOpenRoomModal?.(room);
+              popup.remove();
+            });
+          }
+
+          // "Chỉ đường" button
+          const directionsBtn = document.querySelector(
+            `.popup-directions-btn[data-room-id="${properties.id}"]`
+          );
+          if (directionsBtn) {
+            directionsBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              onShowDirections?.(room);
+              popup.remove();
             });
           }
         }, 0);
@@ -429,7 +600,7 @@ export default function MapView({
 
       markersRef.current.push(marker);
     });
-  }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal]);
+  }, [rooms, mapLoaded, selectedRoom, onRoomSelect, onOpenRoomModal, onShowDirections]);
 
   // Open popup for selected room when it changes from external source (e.g., RoomCard click)
   useEffect(() => {
@@ -482,6 +653,27 @@ export default function MapView({
           background: #2563eb;
           color: white;
           transform: scale(1.1);
+        }
+
+        /* Custom origin marker styles */
+        .origin-marker {
+          cursor: pointer;
+        }
+
+        .origin-marker-container {
+          background: white;
+          border: 2px solid #059669;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .origin-marker-icon {
+          font-size: 16px;
         }
 
         /* User location marker styles */
@@ -576,14 +768,19 @@ export default function MapView({
           margin-bottom: 12px;
         }
 
+        .popup-buttons {
+          display: flex;
+          gap: 8px;
+        }
+
         .popup-view-detail-btn {
-          width: 100%;
-          padding: 8px 16px;
+          flex: 1;
+          padding: 8px 12px;
           background: #2563eb;
           color: white;
           border: none;
           border-radius: 6px;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 500;
           cursor: pointer;
           transition: background 0.2s ease;
@@ -591,6 +788,23 @@ export default function MapView({
 
         .popup-view-detail-btn:hover {
           background: #1d4ed8;
+        }
+
+        .popup-directions-btn {
+          flex: 1;
+          padding: 8px 12px;
+          background: #059669;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .popup-directions-btn:hover {
+          background: #047857;
         }
 
         .popup-price {

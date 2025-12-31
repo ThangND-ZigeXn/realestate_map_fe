@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, Phone, Ruler } from "lucide-react";
+import { GripVertical, MapPin, Phone, Ruler } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,15 +10,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { RoomFeature } from "@/types/room";
 
 interface RoomCardProps {
   room: RoomFeature;
   isSelected: boolean;
   onClick: () => void;
+  draggable?: boolean;
 }
 
-const RoomCard = ({ room, isSelected, onClick }: RoomCardProps) => {
+const RoomCard = ({ room, isSelected, onClick, draggable = false }: RoomCardProps) => {
   const { properties } = room;
 
   const getRoomTypeLabel = (type: string) => {
@@ -34,16 +36,30 @@ const RoomCard = ({ room, isSelected, onClick }: RoomCardProps) => {
     return status === "available" ? "Còn trống" : "Đã thuê";
   };
 
+  // Handle drag start
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!draggable) return;
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("application/json", JSON.stringify(room));
+  };
+
   return (
     <Card
-      className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 pt-0 ${
-        isSelected ? "border-primary ring-2 ring-primary/20 shadow-md" : ""
-      }`}
+      draggable={draggable}
+      onDragStart={handleDragStart}
+      className={cn(
+        "cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 pt-0",
+        isSelected && "border-primary ring-2 ring-primary/20 shadow-md",
+        draggable && "cursor-grab active:cursor-grabbing"
+      )}
       onClick={onClick}
     >
       {/* Header with badges */}
       <div className="relative p-3 pb-0">
         <div className="flex items-center gap-2">
+          {draggable && (
+            <GripVertical className="h-4 w-4 text-slate-400 flex-shrink-0" />
+          )}
           <Badge
             variant="secondary"
             className="bg-primary/10 text-primary border-0"
