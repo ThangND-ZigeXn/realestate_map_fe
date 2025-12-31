@@ -21,13 +21,18 @@ import {
 } from "@/components/ui/sheet";
 import { ROOM_TYPES } from "@/constants/room";
 import type { FilterValues } from "@/types/room";
-import { MapPin, Menu, Navigation } from "lucide-react";
+import { Menu } from "lucide-react";
+
+import AddressSearchBox from "./AddressSearchBox";
 
 interface FilterBarProps {
   filters: FilterValues;
   isGettingLocation: boolean;
   locationError: string | null;
-  onFilterChange: (field: keyof FilterValues, value: string) => void;
+  onFilterChange: <K extends keyof FilterValues>(
+    field: K,
+    value: FilterValues[K]
+  ) => void;
   onGetCurrentLocation: () => void;
   onApplyFilters: () => void;
   onResetFilters: () => void;
@@ -42,6 +47,14 @@ const FilterBar = ({
   onApplyFilters,
   onResetFilters,
 }: FilterBarProps) => {
+  const handleNumberChange = (
+    field: "minPrice" | "maxPrice" | "minArea" | "maxArea",
+    value: string
+  ) => {
+    const numValue = value === "" ? undefined : parseInt(value, 10);
+    onFilterChange(field, isNaN(numValue as number) ? undefined : numValue);
+  };
+
   return (
     <Sheet modal={false}>
       <SheetTrigger asChild>
@@ -62,33 +75,12 @@ const FilterBar = ({
         <div className="grid flex-1 auto-rows-min gap-6 px-4 py-6">
           <div className="grid gap-3">
             <Label htmlFor="location">Vị trí</Label>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input
-                  id="location"
-                  type="text"
-                  placeholder="Nhập địa chỉ hoặc sử dụng GPS"
-                  value={filters.location}
-                  onChange={(e) => onFilterChange("location", e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={onGetCurrentLocation}
-                disabled={isGettingLocation}
-                title="Lấy vị trí hiện tại"
-              >
-                <Navigation
-                  className={`size-4 ${
-                    isGettingLocation ? "animate-spin" : ""
-                  }`}
-                />
-              </Button>
-            </div>
+            <AddressSearchBox
+              value={filters.address || ""}
+              onChange={(value) => onFilterChange("address", value)}
+              onGetCurrentLocation={onGetCurrentLocation}
+              isGettingLocation={isGettingLocation}
+            />
             {locationError && (
               <p className="text-sm text-destructive">{locationError}</p>
             )}
@@ -109,8 +101,10 @@ const FilterBar = ({
                   id="min-price"
                   type="number"
                   placeholder="0"
-                  value={filters.minPrice}
-                  onChange={(e) => onFilterChange("minPrice", e.target.value)}
+                  value={filters.minPrice ?? ""}
+                  onChange={(e) =>
+                    handleNumberChange("minPrice", e.target.value)
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -124,8 +118,10 @@ const FilterBar = ({
                   id="max-price"
                   type="number"
                   placeholder="Không giới hạn"
-                  value={filters.maxPrice}
-                  onChange={(e) => onFilterChange("maxPrice", e.target.value)}
+                  value={filters.maxPrice ?? ""}
+                  onChange={(e) =>
+                    handleNumberChange("maxPrice", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -146,8 +142,12 @@ const FilterBar = ({
                   id="min-area"
                   type="number"
                   placeholder="0"
-                  value={filters.minArea}
-                  onChange={(e) => onFilterChange("minArea", e.target.value)}
+                  min={0}
+                  max={1000}
+                  value={filters.minArea ?? ""}
+                  onChange={(e) =>
+                    handleNumberChange("minArea", e.target.value)
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -161,8 +161,12 @@ const FilterBar = ({
                   id="max-area"
                   type="number"
                   placeholder="Không giới hạn"
-                  value={filters.maxArea}
-                  onChange={(e) => onFilterChange("maxArea", e.target.value)}
+                  min={0}
+                  max={1000}
+                  value={filters.maxArea ?? ""}
+                  onChange={(e) =>
+                    handleNumberChange("maxArea", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -171,8 +175,10 @@ const FilterBar = ({
           <div className="grid gap-3">
             <Label htmlFor="room-type">Loại phòng</Label>
             <Select
-              value={filters.roomType}
-              onValueChange={(value) => onFilterChange("roomType", value)}
+              value={filters.roomType || ""}
+              onValueChange={(value) =>
+                onFilterChange("roomType", value as FilterValues["roomType"])
+              }
             >
               <SelectTrigger id="room-type" className="w-full">
                 <SelectValue placeholder="Chọn loại phòng" />

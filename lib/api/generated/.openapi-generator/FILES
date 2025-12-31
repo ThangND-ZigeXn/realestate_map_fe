@@ -1,0 +1,16 @@
+.gitignore
+.npmignore
+.openapi-generator-ignore
+api.ts
+api/rooms-api.ts
+base.ts
+common.ts
+configuration.ts
+git_push.sh
+index.ts
+models/geo-jsonfeature-collection.ts
+models/geo-jsonfeature-geometry.ts
+models/geo-jsonfeature-properties.ts
+models/geo-jsonfeature.ts
+models/index.ts
+models/model-error.ts
