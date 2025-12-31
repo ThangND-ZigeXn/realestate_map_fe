@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=${MAPBOX_TOKEN}
+        - NEXT_PUBLIC_GEMINI_API_KEY=${GEMINI_API_KEY}
     container_name: realestate-map-app
     restart: unless-stopped
     ports:
@@ -13,7 +16,8 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_MAPBOX_TOKEN=${MAPBOX_TOKEN:-pk.eyJ1IjoibGluaGxlOTgiLCJhIjoiY21qcmNjN3lpMm5tZDNmcTFkdGQzcHc2MiJ9.TkC-SnY66s8USOXDli7IPg}
+      - NEXT_PUBLIC_MAPBOX_TOKEN=${MAPBOX_TOKEN}
+      - NEXT_PUBLIC_GEMINI_API_KEY=${GEMINI_API_KEY}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s

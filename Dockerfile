@@ -16,6 +16,14 @@ FROM node:24-alpine AS builder
 
 WORKDIR /realestate_map_fe
 
+# Build arguments for Next.js public env vars (inlined at build time)
+ARG NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
+ARG NEXT_PUBLIC_GEMINI_API_KEY
+
+# Set as environment variables for build
+ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
+ENV NEXT_PUBLIC_GEMINI_API_KEY=$NEXT_PUBLIC_GEMINI_API_KEY
+
 COPY --from=deps /realestate_map_fe/node_modules ./node_modules
 
 COPY . .

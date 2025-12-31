@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import AIComparisonBox from "@/components/features/AIAssistant/AIComparisonBox";
+import DirectionsPanel from "@/components/features/DirectionsPanel";
 import FilterBar from "@/components/features/FilterBar";
 import LocationPrompt from "@/components/features/LocationPrompt";
 import MapView from "@/components/features/MapView";
 import RoomDetailModal from "@/components/features/RoomDetailModal";
 import RoomListSidebar from "@/components/features/RoomListSidebar";
+import type { DirectionsRoute } from "@/lib/mapbox-directions";
 import { useRooms } from "@/lib/react-query/rooms/use-room";
 import type { FilterValues, MapBoundsInfo, RoomFeature } from "@/types/room";
 
@@ -110,6 +113,18 @@ export default function Home() {
 
   // Track if we've tried auto GPS request
   const gpsAutoRequested = useRef(false);
+
+  // AI Comparison state
+  const [comparisonRooms, setComparisonRooms] = useState<RoomFeature[]>([]);
+
+  // Sidebar open state (for AI box positioning)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Directions state
+  const [directionsRoom, setDirectionsRoom] = useState<RoomFeature | null>(null);
+  const [currentRoute, setCurrentRoute] = useState<DirectionsRoute | null>(null);
+  const [isPickingOrigin, setIsPickingOrigin] = useState(false);
+  const [customOrigin, setCustomOrigin] = useState<[number, number] | null>(null);
 
   // Build query params from appliedFilters - filter out empty/undefined values
   const queryParams =
@@ -317,6 +332,66 @@ export default function Home() {
     // when currentMapRadius changes
   }, []);
 
+  // AI Comparison handlers
+  const handleAddToComparison = useCallback((room: RoomFeature) => {
+    setComparisonRooms((prev) => {
+      if (prev.length >= 3) return prev;
+      if (prev.some((r) => r.properties.id === room.properties.id)) return prev;
+      return [...prev, room];
+    });
+  }, []);
+
+  const handleRemoveFromComparison = useCallback((roomId: number) => {
+    setComparisonRooms((prev) => prev.filter((r) => r.properties.id !== roomId));
+  }, []);
+
+  const handleClearComparison = useCallback(() => {
+    setComparisonRooms([]);
+  }, []);
+
+  // Directions handlers
+  const handleShowDirections = useCallback((room: RoomFeature) => {
+    setDirectionsRoom(room);
+  }, []);
+
+  const handleCloseDirections = useCallback(() => {
+    setDirectionsRoom(null);
+    setCurrentRoute(null);
+    setCustomOrigin(null);
+    setIsPickingOrigin(false);
+  }, []);
+
+  const handleRouteCalculated = useCallback((route: DirectionsRoute | null) => {
+    setCurrentRoute(route);
+  }, []);
+
+  const handleRequestPickOrigin = useCallback(() => {
+    setIsPickingOrigin(true);
+  }, []);
+
+  const handleOriginPicked = useCallback((coords: [number, number]) => {
+    setCustomOrigin(coords);
+    setIsPickingOrigin(false);
+  }, []);
+
+  // Listen for custom event from AIComparisonBox
+  useEffect(() => {
+    const handleCustomEvent = (e: CustomEvent<RoomFeature>) => {
+      handleAddToComparison(e.detail);
+    };
+
+    window.addEventListener(
+      "addRoomToComparison",
+      handleCustomEvent as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        "addRoomToComparison",
+        handleCustomEvent as EventListener
+      );
+    };
+  }, [handleAddToComparison]);
   return (
     <div className="relative h-screen w-screen overflow-hidden">
       {/* Map View - Full screen background */}
@@ -326,11 +401,41 @@ export default function Home() {
         onRoomSelect={handleRoomSelect}
         onOpenRoomModal={handleOpenRoomModal}
         onMapBoundsChange={handleMapBoundsChange}
+        onShowDirections={handleShowDirections}
         isLoading={isLoading}
         center={mapCenter}
         userLocation={userLocation}
         searchOrigin={searchOrigin}
+        route={currentRoute}
+        isPickingOrigin={isPickingOrigin}
+        onOriginPicked={handleOriginPicked}
+        customOrigin={customOrigin}
       />
+
+      {/* Picking Origin Hint */}
+      {isPickingOrigin && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+          <span>👆 Click vào bản đồ để chọn điểm xuất phát</span>
+          <button
+            onClick={() => setIsPickingOrigin(false)}
+            className="ml-2 hover:bg-emerald-700 rounded-full p-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Directions Panel */}
+      {directionsRoom && (
+        <DirectionsPanel
+          room={directionsRoom}
+          userLocation={userLocation}
+          onClose={handleCloseDirections}
+          onRouteCalculated={handleRouteCalculated}
+          onRequestPickOrigin={handleRequestPickOrigin}
+          customOrigin={customOrigin}
+        />
+      )}
 
       {/* Filter Bar - Left side */}
       <FilterBar
@@ -350,6 +455,7 @@ export default function Home() {
         onRoomSelect={handleFlyToRoom}
         isLoading={isLoading}
         error={error}
+        onOpenChange={setIsSidebarOpen}
       />
 
       {/* Room Detail Modal */}
@@ -367,6 +473,16 @@ export default function Home() {
         onRequestGPS={handleGetCurrentLocation}
         onSearchLocation={handleSearchLocation}
         onClose={() => setShowLocationPrompt(false)}
+      />
+
+      {/* AI Comparison Box - Bottom Right */}
+      <AIComparisonBox
+        selectedRooms={comparisonRooms}
+        onDrop={handleAddToComparison}
+        onRemoveRoom={handleRemoveFromComparison}
+        onClearAll={handleClearComparison}
+        onViewRoom={handleOpenRoomModal}
+        isSidebarOpen={isSidebarOpen}
       />
     </div>
   );
